@@ -59,7 +59,6 @@ class TestCensysLookup:
         cl.api_id = ""
         cl.api_secret = ""
         result = cl.search_ip("8.8.8.8")
-        # Missing credentials → graceful skip, not a hard error.
         assert classify(result) == SKIPPED
         assert result.get("error") is None
         assert "API key" in result.get("status_reason", "")

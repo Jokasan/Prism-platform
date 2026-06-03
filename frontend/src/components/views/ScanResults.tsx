@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Printer, Download, Shield, AlertTriangle, Globe, Server, Lock, User, Clock, Zap, Phone, MessageCircle, Map, GitBranch, Code, Brain, ChevronDown, ChevronUp, SendHorizontal, Mail, Copy, Eye, ShieldAlert, ArrowUp, FileSpreadsheet, FileText, Search } from 'lucide-react';
-import type { ScanResults, ScanMeta, OpsecFinding } from '@/lib/types';
+import type { ScanResults, ScanMeta, OpsecFinding, ModuleStatus, ModuleStatusFields } from '@/lib/types';
 import { fetchReportBlob, generateAiSummary, sendAiChat, getMapData, getGraphData } from '@/lib/api';
 import { useTranslations } from '@/lib/i18n';
 
@@ -238,23 +238,20 @@ function Card({ title, extra, children }: { title?: string; extra?: React.ReactN
   );
 }
 
-type ModStatus = 'ok' | 'skipped' | 'rate_limited' | 'error';
-
-/** Derive the standard status from a module result (honours explicit status). */
-function modStatus(m?: { status?: string; error?: string | null } | null): ModStatus {
+function modStatus(m?: (ModuleStatusFields & { error?: string | null }) | null): ModuleStatus {
   if (!m) return 'ok';
   if (m.status === 'skipped' || m.status === 'rate_limited' || m.status === 'error') return m.status;
   if (m.error) return 'error';
   return 'ok';
 }
 
-const STATUS_BADGE: Record<Exclude<ModStatus, 'ok'>, { label: string; color: string; hint: string }> = {
+const STATUS_BADGE: Record<Exclude<ModuleStatus, 'ok'>, { label: string; color: string; hint: string }> = {
   skipped: { label: 'SKIPPED', color: '#8b949e', hint: 'No API key configured' },
   rate_limited: { label: 'RATE LIMITED', color: '#d29922', hint: 'Provider rate limit reached' },
   error: { label: 'ERROR', color: '#f85149', hint: 'Module failed' },
 };
 
-function ModuleStatusBadge({ status, label }: { status: ModStatus; label?: string }) {
+function ModuleStatusBadge({ status, label }: { status: ModuleStatus; label?: string }) {
   if (status === 'ok') return null;
   const b = STATUS_BADGE[status];
   return (
@@ -279,14 +276,9 @@ function ModuleNotice({ status, reason }: { status: 'skipped' | 'rate_limited'; 
   );
 }
 
-/**
- * Render a card for a key-dependent module: the data when it ran OK, a clear
- * "skipped"/"rate limited" notice when it degraded gracefully, and nothing on
- * a hard error (kept hidden as before).
- */
 function KeyModuleCard({ title, mod, children }: {
   title: string;
-  mod?: { status?: string; error?: string | null; status_reason?: string } | null;
+  mod?: (ModuleStatusFields & { error?: string | null }) | null;
   children: React.ReactNode;
 }) {
   if (!mod) return null;

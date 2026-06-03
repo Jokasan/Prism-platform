@@ -13,7 +13,14 @@ import type { ScanType, ScanStatus, ToolMode, ScanResults as ScanResultsType, Sc
 
 type View = 'idle' | 'tool' | 'scanning' | 'results' | 'compare';
 
-/** Format a `module_done` event into a progress-log line per status. */
+const LIVE_STATUSES: readonly LiveModuleStatus[] = ['ok', 'skipped', 'rate_limited', 'error', 'running'];
+
+function toLiveStatus(status: unknown): LiveModuleStatus {
+  return typeof status === 'string' && (LIVE_STATUSES as readonly string[]).includes(status)
+    ? (status as LiveModuleStatus)
+    : 'ok';
+}
+
 function moduleDoneLine(msg: { module: string; status?: string; reason?: string; error?: string }): string {
   const detail = msg.reason || msg.error;
   switch (msg.status) {
@@ -108,7 +115,7 @@ export function App() {
             const next = { ...prev };
             for (const msg of newMsgs) {
               if (msg.type === 'module_start') next[msg.module] = 'running';
-              else if (msg.type === 'module_done') next[msg.module] = (msg.status as LiveModuleStatus) || 'ok';
+              else if (msg.type === 'module_done') next[msg.module] = toLiveStatus(msg.status);
             }
             return next;
           });
@@ -153,7 +160,7 @@ export function App() {
           setModuleStatuses(prev => ({ ...prev, [msg.module]: 'running' }));
 
         } else if (msg.type === 'module_done') {
-          setModuleStatuses(prev => ({ ...prev, [msg.module]: (msg.status as LiveModuleStatus) || 'ok' }));
+          setModuleStatuses(prev => ({ ...prev, [msg.module]: toLiveStatus(msg.status) }));
           setProgressLog(prev => [...prev, moduleDoneLine(msg)]);
 
         } else if (msg.type === '_done') {

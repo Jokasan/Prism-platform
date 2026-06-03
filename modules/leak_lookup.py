@@ -3,7 +3,7 @@ import hashlib
 from typing import Dict, Any, List, Optional
 import sys
 sys.path.append('..')
-from config import LEAK_LOOKUP_API_KEY, Colors
+from config import LEAK_LOOKUP_API_KEY, HIBP_API_KEY, Colors
 from modules.module_status import annotate, classify, print_status_notice, OK, SKIPPED, RATE_LIMITED, ERROR
 
 
@@ -14,6 +14,7 @@ class LeakLookup:
 
     def __init__(self):
         self.leak_lookup_key = LEAK_LOOKUP_API_KEY
+        self.hibp_key = HIBP_API_KEY
 
     def check_email_hibp(self, email: str) -> Dict[str, Any]:
         result = {
@@ -24,9 +25,12 @@ class LeakLookup:
             "error": None
         }
 
+        if not self.hibp_key:
+            return annotate(result, SKIPPED, "No API key configured (HIBP_API_KEY)")
+
         headers = {
             "User-Agent": "OSINT-Tool",
-            "hibp-api-key": ""
+            "hibp-api-key": self.hibp_key,
         }
 
         try:
@@ -60,7 +64,7 @@ class LeakLookup:
                 result["breached"] = False
                 result["status"] = OK
             elif response.status_code == 401:
-                annotate(result, SKIPPED, "HIBP API key required for breach lookup")
+                annotate(result, SKIPPED, "Invalid HIBP API key")
             elif response.status_code == 429:
                 annotate(result, RATE_LIMITED, "HIBP API rate limit reached")
             else:
@@ -171,8 +175,7 @@ class LeakLookup:
             result["is_compromised"] = True
             result["total_breaches"] += len(result["leak_lookup"]["leaks"])
 
-        # Aggregate the sub-source statuses into a single status for the badge:
-        # any working source wins, otherwise surface rate-limited/skipped state.
+        # A working source wins; otherwise surface rate-limited/skipped state.
         sub_statuses = [classify(result["hibp"])]
         if result["leak_lookup"] is not None:
             sub_statuses.append(classify(result["leak_lookup"]))

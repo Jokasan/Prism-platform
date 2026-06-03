@@ -298,7 +298,9 @@ class TestLeakLookup:
                 return []
 
         monkeypatch.setattr(requests, "get", lambda *a, **k: MockResp())
-        result = LeakLookup().check_email_hibp("clean@example.com")
+        ll = LeakLookup()
+        ll.hibp_key = "fakekey"
+        result = ll.check_email_hibp("clean@example.com")
         assert result["breached"] is False
         assert result["total_breaches"] == 0
         assert result["error"] is None
@@ -318,14 +320,33 @@ class TestLeakLookup:
                 ]
 
         monkeypatch.setattr(requests, "get", lambda *a, **k: MockResp())
-        result = LeakLookup().check_email_hibp("breached@example.com")
+        ll = LeakLookup()
+        ll.hibp_key = "fakekey"
+        result = ll.check_email_hibp("breached@example.com")
         assert result["breached"] is True
         assert result["total_breaches"] == 1
         assert result["breaches"][0]["name"] == "Adobe"
 
+    def test_check_email_hibp_no_key_skips_without_request(self, monkeypatch):
+        import requests
+        from modules.leak_lookup import LeakLookup
+        from modules.module_status import classify, SKIPPED
+
+        def _fail(*a, **k):
+            raise AssertionError("HIBP must not be called without a key")
+
+        monkeypatch.setattr(requests, "get", _fail)
+        ll = LeakLookup()
+        ll.hibp_key = ""
+        result = ll.check_email_hibp("x@example.com")
+        assert classify(result) == SKIPPED
+        assert result["error"] is None
+        assert "HIBP_API_KEY" in result["status_reason"]
+
     def test_check_email_hibp_401(self, monkeypatch):
         import requests
         from modules.leak_lookup import LeakLookup
+        from modules.module_status import classify, SKIPPED
 
         class MockResp:
             status_code = 401
@@ -333,12 +354,12 @@ class TestLeakLookup:
                 return {}
 
         monkeypatch.setattr(requests, "get", lambda *a, **k: MockResp())
-        result = LeakLookup().check_email_hibp("x@example.com")
-        # HIBP 401 (key required) is reported as a graceful skip, not a hard error.
-        from modules.module_status import classify, SKIPPED
+        ll = LeakLookup()
+        ll.hibp_key = "fakekey"
+        result = ll.check_email_hibp("x@example.com")
         assert classify(result) == SKIPPED
         assert result["error"] is None
-        assert "API key" in result["status_reason"]
+        assert "HIBP" in result["status_reason"]
 
     def test_check_password_pwned(self, monkeypatch):
         import requests
