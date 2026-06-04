@@ -119,17 +119,16 @@ def _set_cache(module: str, target: str, data: Any) -> None:
     except Exception:
         pass
 
-def _geocode_place(query: str) -> Optional[tuple]:
+def _geocode_place(query: str) -> Optional[Dict]:
     import hashlib
     cache_path = os.path.join(_CACHE_DIR, "geocode_" + hashlib.md5(query.lower().encode()).hexdigest() + ".json")
     try:
         if os.path.exists(cache_path) and time.time() - os.path.getmtime(cache_path) < 30 * 86400:
             with open(cache_path, "r", encoding="utf-8") as f:
-                cached = json.load(f)
-            return (cached["lat"], cached["lng"]) if cached else None
+                return json.load(f)
     except Exception:
         pass
-    coords = None
+    place = None
     try:
         r = _requests.get(
             "https://nominatim.openstreetmap.org/search",
@@ -139,15 +138,17 @@ def _geocode_place(query: str) -> Optional[tuple]:
         )
         arr = r.json()
         if arr:
-            coords = (float(arr[0]["lat"]), float(arr[0]["lon"]))
+            bb = arr[0].get("boundingbox")
+            bbox = [float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])] if bb and len(bb) == 4 else None
+            place = {"lat": float(arr[0]["lat"]), "lng": float(arr[0]["lon"]), "bbox": bbox}
     except Exception:
         return None
     try:
         with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump({"lat": coords[0], "lng": coords[1]} if coords else None, f)
+            json.dump(place, f)
     except Exception:
         pass
-    return coords
+    return place
 
 def _scan_path(scan_id: str) -> str:
     return os.path.join(_SCANS_DIR, f"{scan_id}.json")
@@ -749,13 +750,19 @@ async def get_map_data(request: Request, scan_id: str):
         region = hlr.get("location") or hlr.get("region") or phone.get("region")
         phone_label = hlr.get("formatted") or hlr.get("phone") or scan["target"]
 
-        coords = None
+        place = None
         if region or country:
-            coords = _geocode_place(", ".join(p for p in (region, country) if p))
+            place = _geocode_place(", ".join(p for p in (region, country) if p))
 
-        if coords:
+        if place:
+            bbox = place.get("bbox")
+            if bbox:
+                clat, clng = (bbox[0] + bbox[1]) / 2, (bbox[2] + bbox[3]) / 2
+            else:
+                clat, clng = place["lat"], place["lng"]
             markers.append({
-                "lat": coords[0], "lng": coords[1],
+                "lat": clat, "lng": clng,
+                "bbox": bbox,
                 "ip": phone_label, "label": phone_label,
                 "city": region or None, "country": country or None,
                 "org": carrier, "type": "phone",

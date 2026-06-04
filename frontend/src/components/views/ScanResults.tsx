@@ -15,6 +15,7 @@ type MapMarker = {
   ip?: string;
   approximate?: boolean;
   precision?: string;
+  bbox?: number[];
 };
 
 type MapData = {
@@ -94,22 +95,30 @@ function MapView({ scanId, onCopy }: { scanId: string; onCopy: (value: string) =
         const bounds: [number, number][] = [];
         for (const m of data.markers) {
           if (!Number.isFinite(m.lat) || !Number.isFinite(m.lng)) continue;
-          bounds.push([m.lat, m.lng]);
           const parts = [
             m.ip ? `IP: ${escapeHtml(m.ip)}` : '',
             m.city || m.country ? `Location: ${escapeHtml([m.city, m.country].filter(Boolean).join(', '))}` : '',
             m.org ? `Organization: ${escapeHtml(m.org)}` : '',
-            `Coordinates: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}`,
             m.precision ? `Precision: ${escapeHtml(m.precision)}` : '',
           ].filter(Boolean);
           const popup = `<b>${escapeHtml(m.label || m.ip || 'Location')}</b><br/>${parts.join('<br/>')}`;
-          if (m.approximate) {
+          const hasBbox = m.approximate && Array.isArray(m.bbox) && m.bbox.length === 4;
+          if (hasBbox) {
+            const sw: [number, number] = [m.bbox![0], m.bbox![2]];
+            const ne: [number, number] = [m.bbox![1], m.bbox![3]];
+            L.rectangle([sw, ne], { color: '#4f8ef7', weight: 1, fillColor: '#4f8ef7', fillOpacity: 0.10 })
+              .bindPopup(`${popup}<br/><i>Approximate ${escapeHtml(m.precision || 'area')}-level — phone numbers don't expose an exact location</i>`)
+              .addTo(markersRef.current);
+            bounds.push(sw, ne);
+          } else if (m.approximate) {
             const radius = m.precision === 'country' ? 250000 : 70000;
             L.circle([m.lat, m.lng], { radius, color: '#4f8ef7', weight: 1, fillColor: '#4f8ef7', fillOpacity: 0.12 })
               .bindPopup(`${popup}<br/><i>Approximate ${escapeHtml(m.precision || 'area')}-level location</i>`)
               .addTo(markersRef.current);
+            bounds.push([m.lat, m.lng]);
           } else {
             L.marker([m.lat, m.lng]).bindPopup(popup).addTo(markersRef.current);
+            bounds.push([m.lat, m.lng]);
           }
         }
 
