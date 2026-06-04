@@ -710,7 +710,23 @@ async def get_map_data(request: Request, scan_id: str):
 
     center = markers[0] if markers else None
     zoom = 5 if (markers and markers[0].get("type") == "phone") else None
-    return {"markers": markers, "center": center, "zoom": zoom}
+
+    info = None
+    if not markers:
+        hlr = results.get("hlr") or {}
+        phone = results.get("phone") or {}
+        country = hlr.get("country_name") or hlr.get("country") or phone.get("country_name")
+        carrier = hlr.get("carrier") or phone.get("carrier")
+        region = hlr.get("location") or hlr.get("region") or phone.get("region")
+        if country or carrier or region:
+            info = {
+                "reason": "Phone numbers don't expose precise GPS coordinates.",
+                "country": country or None,
+                "carrier": carrier or None,
+                "region": region or None,
+            }
+
+    return {"markers": markers, "center": center, "zoom": zoom, "info": info}
 
 def _normalize_lang(raw: Optional[str]) -> str:
     from modules.report_i18n import SUPPORTED_LANGS

@@ -21,6 +21,7 @@ type MapData = {
   markers: MapMarker[];
   center: { lat: number; lng: number } | null;
   zoom?: number | null;
+  info?: { reason?: string; country?: string | null; carrier?: string | null; region?: string | null } | null;
 };
 
 let leafletLoader: Promise<any> | null = null;
@@ -132,7 +133,21 @@ function MapView({ scanId, onCopy }: { scanId: string; onCopy: (value: string) =
 
   if (error) return <div className="text-red text-sm">{error}</div>;
   if (!data) return <div className="text-text-3 text-sm animate-pulse">Loading map…</div>;
-  if (!data.markers?.length) return <div className="text-text-3 text-sm">No geolocation data available</div>;
+  if (!data.markers?.length) {
+    if (data.info && (data.info.country || data.info.carrier || data.info.region)) {
+      return (
+        <div className="text-[12px]">
+          <div className="text-text-2 mb-2">{data.info.reason || 'No precise coordinates available.'}</div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1 max-w-md">
+            {data.info.country && <div className="dt-row"><span className="dt-label">Country</span><span className="dt-value">{data.info.country}</span></div>}
+            {data.info.region && <div className="dt-row"><span className="dt-label">Region</span><span className="dt-value">{data.info.region}</span></div>}
+            {data.info.carrier && <div className="dt-row"><span className="dt-label">Carrier</span><span className="dt-value">{data.info.carrier}</span></div>}
+          </div>
+        </div>
+      );
+    }
+    return <div className="text-text-3 text-sm">No geolocation data available</div>;
+  }
 
   const m = data.markers[0];
 
